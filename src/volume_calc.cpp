@@ -61,6 +61,11 @@ VolumeCalculation::VolumeCalculation(pugi::xml_node node)
   upper_right_ = get_node_array<double>(node, "upper_right");
   n_samples_ = std::stoull(get_node_value(node, "samples"));
 
+  // see if user wants cell volumes normalized by number of instances
+  if (check_for_node(node, "normalize") && domain_type == "cell"){
+    normalize_ = get_node_value_bool(node, "normalize");
+  }
+
   if (check_for_node(node, "threshold")) {
     pugi::xml_node threshold_node = node.child("threshold");
 
@@ -340,13 +345,24 @@ vector<VolumeCalculation::Result> VolumeCalculation::execute() const
           // atoms/b-cm. To get to atoms we multiply by 10^24 V.
           double mean = 1.0e24 * volume_sample * atoms(j, 0);
           double stdev = 1.0e24 * volume_sample * std::sqrt(atoms(j, 1));
-
+          
           // Convert full arrays to vectors
           if (mean > 0.0) {
             result.nuclides.push_back(j);
             result.atoms.push_back(mean);
             result.uncertainty.push_back(stdev);
           }
+        }
+      }
+      if (normalize_) {
+        auto n_ = model::cells.at(
+                    model::cell_map.at(domain_ids_[i_domain]))->n_instances_;
+        double n_instances = static_cast<double>(n_);
+        result.volume[0] /= n_instances;
+        result.volume[1] /= n_instances;
+        for (int j = 0; j < result.atoms.size(); ++j) {
+          result.atoms[j] /= n_instances;
+          result.uncertainty[j] /= n_instances;
         }
       }
     } // end domain loop

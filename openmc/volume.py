@@ -32,6 +32,9 @@ class VolumeCalculation:
         Upper-right coordinates of bounding box used to sample points. If this
         argument is not supplied, an attempt is made to automatically determine
         a bounding box.
+    normalize : bool
+        If true, normalizes domain results by the number of instances. Only
+        valid for openmc.Cell domains.
 
     Attributes
     ----------
@@ -66,9 +69,12 @@ class VolumeCalculation:
         Number of iterations over samples (for calculations with a trigger).
 
         .. versionadded:: 0.12
+    normalize : bool
+        If true, normalizes domain results by the number of instances. Only
+        valid for openmc.Cell domains.
 
     """
-    def __init__(self, domains, samples, lower_left=None, upper_right=None):
+    def __init__(self, domains, samples, lower_left=None, upper_right=None, normalize=False):
         self._atoms = {}
         self._volumes = {}
         self._threshold = None
@@ -124,6 +130,13 @@ class VolumeCalculation:
         if np.isinf(self.lower_left).any() or np.isinf(self.upper_right).any():
             raise ValueError('Lower-left and upper-right bounding box '
                              'coordinates must be finite.')
+        
+        self.normalize = normalize
+        if normalize and self.domain_type != 'cell':
+            msg = ('Instance normalization will not be conducted because specified '
+                   f'domains are of type {self.domain_type}, not "cell"!')
+            warnings.warn(msg)
+            self.normalize = False
 
     @property
     def ids(self):
@@ -165,6 +178,15 @@ class VolumeCalculation:
         cv.check_type(name, upper_right, Iterable, Real)
         cv.check_length(name, upper_right, 3)
         self._upper_right = upper_right
+    
+    @property
+    def normalize(self):
+        return self._normalize
+    
+    @normalize.setter
+    def normalize(self, normalize):
+        cv.check_type('normalize', normalize, bool)
+        self._normalize = normalize
 
     @property
     def threshold(self):
@@ -351,6 +373,8 @@ class VolumeCalculation:
         ll_elem.text = ' '.join(str(x) for x in self.lower_left)
         ur_elem = ET.SubElement(element, "upper_right")
         ur_elem.text = ' '.join(str(x) for x in self.upper_right)
+        normalize_elem = ET.SubElement(element, "normalize")
+        normalize_elem.text = str(self.normalize)
         if self.threshold:
             trigger_elem = ET.SubElement(element, "threshold")
             trigger_elem.set("type", self.trigger_type)
@@ -382,6 +406,7 @@ class VolumeCalculation:
         lower_left = tuple([float(x) for x in lower_left])
         upper_right = get_text(elem, "upper_right").split()
         upper_right = tuple([float(x) for x in upper_right])
+        normalize = bool(get_text(elem, "normalize"))
 
         # Instantiate some throw-away domains that are used by the constructor
         # to assign IDs
@@ -394,7 +419,7 @@ class VolumeCalculation:
             elif domain_type == 'universe':
                 domains = [openmc.Universe(uid) for uid in ids]
 
-        vol = cls(domains, samples, lower_left, upper_right)
+        vol = cls(domains, samples, lower_left, upper_right, normalize)
 
         # Check for trigger
         trigger_elem = elem.find("threshold")

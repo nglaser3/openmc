@@ -69,6 +69,7 @@ public:
   Position lower_left_;         //!< Lower-left position of bounding box
   Position upper_right_;        //!< Upper-right position of bounding box
   vector<int> domain_ids_;      //!< IDs of domains to find volumes of
+  bool normalize_ {false};              //!< normalize cell volumes by number of instances
 
 private:
   //! \brief Check whether a material has already been hit for a given domain.
